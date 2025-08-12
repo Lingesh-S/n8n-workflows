@@ -1,0 +1,179 @@
+{
+  "name": "Http req tele bot",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        -20
+      ],
+      "id": "1749acfd-0707-4905-9698-5f4f22e59f09",
+      "name": "When clicking ‘Test workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://newsapi.org/v2/top-headlines?sources=techcrunch&apiKey=87e4aa7143be45c2b9a74f240f4d4fa4",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        -180
+      ],
+      "id": "e89c2cc6-5674-4f97-a184-0c1e892193ab",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "articles",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        220,
+        -180
+      ],
+      "id": "c47b7c7d-0a19-467a-b0cf-b601ea5b8719",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ed274935-f09d-4bc9-baed-b4c6b5df0051",
+              "name": "value",
+              "value": "={{ $json.articles.source.name }}",
+              "type": "string"
+            },
+            {
+              "id": "352f076d-21af-412f-8f9a-c063d9be8f04",
+              "name": "headlines",
+              "value": "={{ $json.articles.title }}",
+              "type": "string"
+            },
+            {
+              "id": "55d6b9c9-6a58-4a0e-aae8-9ab132f88916",
+              "name": "content",
+              "value": "={{ $json.articles.content }}",
+              "type": "string"
+            },
+            {
+              "id": "07442226-f37c-4a8c-a227-da4e263354e7",
+              "name": "url",
+              "value": "={{ $json.articles.url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        -180
+      ],
+      "id": "e30f7c40-067e-4010-a1ec-7534c729efbb",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "chatId": "7826385594",
+        "text": "=📰 *{{$json[\"headline\"]}}* 🔗 {{$json[\"url\"]}} 📡 Source: {{$json[\"source\"]}}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        660,
+        -180
+      ],
+      "id": "f452eecd-93e2-404d-a2f2-bc9fe2bd14c9",
+      "name": "Telegram",
+      "webhookId": "6cb369c6-e1f6-4dc8-8064-1e95fc709cab",
+      "credentials": {
+        "telegramApi": {
+          "id": "4HiwNexlqAuxDFgy",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Test workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "618ccaa5-6bb4-40c0-a4e5-b6f6fc45ec20",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cc4dc65b50ce65f77898438eecbc00320065b03e0ae00becc92dfe5fd8a79af8"
+  },
+  "id": "DjRrdhN8KLLlPzNl",
+  "tags": []
+}
