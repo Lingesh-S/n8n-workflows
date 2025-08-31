@@ -1,0 +1,169 @@
+{
+  "name": "Social Media Mention Alert System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "1a2b3c4d-5e6f-7g8h-9i0j-k1l2m3n4o5p6",
+      "name": "Hourly Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "tweet",
+        "operation": "search",
+        "searchText": "YourBrandName OR @YourHandle OR #YourHashtag",
+        "additionalFields": {
+          "includeRetweets": false,
+          "maxResults": 50,
+          "tweetFields": [
+            "created_at",
+            "public_metrics",
+            "context_annotations",
+            "author_id"
+          ]
+        }
+      },
+      "id": "2b3c4d5e-6f7g-8h9i-0j1k-l2m3n4o5p6q7",
+      "name": "Search Twitter Mentions",
+      "type": "n8n-nodes-base.twitter",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const mentions = $input.all();\nconst now = new Date();\nconst oneHourAgo = new Date(now.getTime() - (60 * 60 * 1000));\n\n// Filter mentions from the last hour\nconst recentMentions = mentions.filter(item => {\n  const tweetDate = new Date(item.json.created_at);\n  return tweetDate >= oneHourAgo;\n});\n\n// Categorize mentions by sentiment (basic keyword analysis)\nconst categorizeMention = (text) => {\n  const positiveWords = ['great', 'awesome', 'love', 'excellent', 'amazing', 'good', 'thanks', 'thank you'];\n  const negativeWords = ['bad', 'terrible', 'hate', 'awful', 'problem', 'issue', 'complaint', 'disappointed'];\n  \n  const lowerText = text.toLowerCase();\n  \n  const positiveCount = positiveWords.filter(word => lowerText.includes(word)).length;\n  const negativeCount = negativeWords.filter(word => lowerText.includes(word)).length;\n  \n  if (positiveCount > negativeCount) return 'positive';\n  if (negativeCount > positiveCount) return 'negative';\n  return 'neutral';\n};\n\n// Process mentions\nconst processedMentions = recentMentions.map(item => {\n  const tweet = item.json;\n  return {\n    id: tweet.id,\n    text: tweet.text,\n    author: tweet.author_id,\n    username: tweet.username || 'Unknown',\n    created_at: tweet.created_at,\n    sentiment: categorizeMention(tweet.text),\n    metrics: tweet.public_metrics || {},\n    url: `https://twitter.com/i/web/status/${tweet.id}`\n  };\n});\n\n// Group by sentiment\nconst sentimentGroups = {\n  positive: processedMentions.filter(m => m.sentiment === 'positive'),\n  negative: processedMentions.filter(m => m.sentiment === 'negative'),\n  neutral: processedMentions.filter(m => m.sentiment === 'neutral')\n};\n\n// Calculate engagement metrics\nconst totalEngagement = processedMentions.reduce((sum, mention) => {\n  return sum + (mention.metrics.like_count || 0) + \n         (mention.metrics.retweet_count || 0) + \n         (mention.metrics.reply_count || 0);\n}, 0);\n\nreturn [{\n  json: {\n    summary: {\n      total: processedMentions.length,\n      positive: sentimentGroups.positive.length,\n      negative: sentimentGroups.negative.length,\n      neutral: sentimentGroups.neutral.length,\n      totalEngagement: totalEngagement,\n      timeRange: 'Last Hour',\n      checkedAt: now.toISOString()\n    },\n    mentions: processedMentions,\n    sentimentGroups: sentimentGroups,\n    hasNewMentions: processedMentions.length > 0,\n    highPriorityMentions: processedMentions.filter(m => \n      m.sentiment === 'negative' || \n      (m.metrics.retweet_count || 0) > 10 ||\n      (m.metrics.like_count || 0) > 50\n    )\n  }\n}];"
+      },
+      "id": "3c4d5e6f-7g8h-9i0j-1k2l-m3n4o5p6q7r8",
+      "name": "Process Mentions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{$json.hasNewMentions}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "4d5e6f7g-8h9i-0j1k-2l3m-n4o5p6q7r8s9",
+      "name": "Check for New Mentions",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "social@yourcompany.com",
+        "toEmail": "marketing@yourcompany.com, support@yourcompany.com",
+        "subject": "📱 Social Media Mentions Report - {{$json.summary.total}} new mentions",
+        "message": "Social Media Mentions Summary\n═════════════════════════════\n\nTime Period: {{$json.summary.timeRange}}\nChecked: {{new Date($json.summary.checkedAt).toLocaleString()}}\n\n📊 OVERVIEW\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nTotal Mentions: {{$json.summary.total}}\n✅ Positive: {{$json.summary.positive}}\n❌ Negative: {{$json.summary.negative}}\n➖ Neutral: {{$json.summary.neutral}}\n💫 Total Engagement: {{$json.summary.totalEngagement}}\n\n{{$json.highPriorityMentions.length > 0 ? '🚨 HIGH PRIORITY MENTIONS (' + $json.highPriorityMentions.length + ')\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n' + $json.highPriorityMentions.map(mention => \n'• @' + mention.username + ' (' + mention.sentiment.toUpperCase() + ')\\n' +\n'  \"' + (mention.text.length > 100 ? mention.text.substring(0, 100) + '...' : mention.text) + '\"\\n' +\n'  📊 Likes: ' + (mention.metrics.like_count || 0) + ' | Retweets: ' + (mention.metrics.retweet_count || 0) + '\\n' +\n'  🔗 ' + mention.url + '\\n'\n).join('\\n') + '\\n' : ''}{{$json.sentimentGroups.positive.length > 0 ? '😊 POSITIVE MENTIONS (' + $json.sentimentGroups.positive.length + ')\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n' + $json.sentimentGroups.positive.slice(0, 3).map(mention => \n'• @' + mention.username + '\\n' +\n'  \"' + (mention.text.length > 80 ? mention.text.substring(0, 80) + '...' : mention.text) + '\"\\n' +\n'  🔗 ' + mention.url\n).join('\\n\\n') + '\\n\\n' : ''}}{{$json.sentimentGroups.negative.length > 0 ? '😟 NEGATIVE MENTIONS (' + $json.sentimentGroups.negative.length + ')\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n' + $json.sentimentGroups.negative.slice(0, 3).map(mention => \n'• @' + mention.username + '\\n' +\n'  \"' + (mention.text.length > 80 ? mention.text.substring(0, 80) + '...' : mention.text) + '\"\\n' +\n'  🔗 ' + mention.url\n).join('\\n\\n') + '\\n\\n' : ''}}📋 RECOMMENDED ACTIONS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n{{$json.sentimentGroups.positive.length > 0 ? '• Engage with positive mentions to build relationships\\n' : ''}}{{$json.sentimentGroups.negative.length > 0 ? '• Address negative mentions promptly and professionally\\n' : ''}}{{$json.highPriorityMentions.length > 0 ? '• Prioritize high-engagement mentions for immediate response\\n' : ''}}• Monitor trending topics and hashtags related to your brand\n• Consider creating content based on customer feedback\n\n---\nThis is an automated report from your social media monitoring system.\nFor the complete list of mentions, please check your social media management dashboard."
+      },
+      "id": "5e6f7g8h-9i0j-1k2l-3m4n-o5p6q7r8s9t0",
+      "name": "Send Mentions Summary",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Hourly Check": {
+      "main": [
+        [
+          {
+            "node": "Search Twitter Mentions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Twitter Mentions": {
+      "main": [
+        [
+          {
+            "node": "Process Mentions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Mentions": {
+      "main": [
+        [
+          {
+            "node": "Check for New Mentions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for New Mentions": {
+      "main": [
+        [
+          {
+            "node": "Send Mentions Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2024-01-15T10:00:00.000Z",
+  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1",
+  "triggerCount": 0,
+  "tags": []
+}
