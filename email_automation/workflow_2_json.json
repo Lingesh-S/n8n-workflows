@@ -1,0 +1,162 @@
+{
+  "name": "Database Backup Reminder System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "1a2b3c4d-5e6f-7g8h-9i0j-k1l2m3n4o5p6",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "protocol": "ftp",
+        "hostname": "backup-server.com",
+        "username": "backup_user",
+        "password": "backup_password",
+        "operation": "list",
+        "path": "/backups/database/"
+      },
+      "id": "2b3c4d5e-6f7g-8h9i-0j1k-l2m3n4o5p6q7",
+      "name": "List Backup Files",
+      "type": "n8n-nodes-base.ftp",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const files = $input.all();\nconst now = new Date();\nconst twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));\n\nlet latestBackup = null;\nlet backupFiles = [];\n\n// Process all backup files\nfor (const item of files) {\n  const fileName = item.json.name;\n  const fileDate = new Date(item.json.date);\n  \n  // Filter for database backup files (assuming .sql or .dump extension)\n  if (fileName.includes('database') && (fileName.endsWith('.sql') || fileName.endsWith('.dump'))) {\n    backupFiles.push({\n      name: fileName,\n      date: fileDate,\n      size: item.json.size\n    });\n    \n    // Track the latest backup\n    if (!latestBackup || fileDate > latestBackup.date) {\n      latestBackup = {\n        name: fileName,\n        date: fileDate,\n        size: item.json.size\n      };\n    }\n  }\n}\n\n// Determine backup status\nlet status = 'missing';\nlet message = 'No database backup files found!';\nlet isRecent = false;\n\nif (latestBackup) {\n  const hoursSinceBackup = (now - latestBackup.date) / (1000 * 60 * 60);\n  isRecent = latestBackup.date >= twentyFourHoursAgo;\n  \n  if (isRecent) {\n    status = 'current';\n    message = `Latest backup is current (${Math.round(hoursSinceBackup)} hours old)`;\n  } else {\n    status = 'outdated';\n    message = `Latest backup is outdated (${Math.round(hoursSinceBackup)} hours old)`;\n  }\n}\n\nreturn [{\n  json: {\n    status: status,\n    message: message,\n    isRecent: isRecent,\n    latestBackup: latestBackup,\n    totalBackupFiles: backupFiles.length,\n    backupFiles: backupFiles.slice(0, 5), // Include last 5 backups\n    checkedAt: now.toISOString()\n  }\n}];"
+      },
+      "id": "3c4d5e6f-7g8h-9i0j-1k2l-m3n4o5p6q7r8",
+      "name": "Analyze Backups",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{$json.isRecent}}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "4d5e6f7g-8h9i-0j1k-2l3m-n4o5p6q7r8s9",
+      "name": "Check if Alert Needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "backups@yourcompany.com",
+        "toEmail": "admin@yourcompany.com, dba@yourcompany.com",
+        "subject": "⚠️ Database Backup Alert - {{$json.status.toUpperCase()}}",
+        "message": "Database Backup Status Report\n=============================\n\nStatus: {{$json.status.toUpperCase()}}\nMessage: {{$json.message}}\n\n{{$json.latestBackup ? 'Latest Backup Details:\\n' + \n'- File: ' + $json.latestBackup.name + '\\n' +\n'- Date: ' + new Date($json.latestBackup.date).toLocaleString() + '\\n' +\n'- Size: ' + Math.round($json.latestBackup.size / 1024 / 1024) + ' MB\\n' : ''}}\n\nTotal backup files found: {{$json.totalBackupFiles}}\n\nRecent backup files:\n{{$json.backupFiles.map(file => '- ' + file.name + ' (' + new Date(file.date).toLocaleDateString() + ')').join('\\n')}}\n\nChecked at: {{new Date($json.checkedAt).toLocaleString()}}\n\nPlease ensure database backups are running correctly.\n\n---\nThis is an automated message from your backup monitoring system."
+      },
+      "id": "5e6f7g8h-9i0j-1k2l-3m4n-o5p6q7r8s9t0",
+      "name": "Send Backup Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "List Backup Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Backup Files": {
+      "main": [
+        [
+          {
+            "node": "Analyze Backups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Backups": {
+      "main": [
+        [
+          {
+            "node": "Check if Alert Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Alert Needed": {
+      "main": [
+        [
+          {
+            "node": "Send Backup Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2024-01-15T10:00:00.000Z",
+  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1",
+  "triggerCount": 0,
+  "tags": []
+}
