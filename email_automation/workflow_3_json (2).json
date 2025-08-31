@@ -1,0 +1,209 @@
+{
+  "name": "Form Submission Auto-Responder",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "form-submission",
+        "options": {}
+      },
+      "id": "1a2b3c4d-5e6f-7g8h-9i0j-k1l2m3n4o5p6",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const formData = $input.first().json;\n\n// Extract form fields\nconst name = formData.name || formData.fullName || 'Valued Customer';\nconst email = formData.email || '';\nconst subject = formData.subject || 'General Inquiry';\nconst message = formData.message || formData.comments || '';\nconst phone = formData.phone || '';\nconst company = formData.company || '';\n\n// Validate email format\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nconst isValidEmail = emailRegex.test(email);\n\n// Generate reference number\nconst referenceNumber = 'REF-' + Date.now().toString(36).toUpperCase();\n\n// Format submission date\nconst submissionDate = new Date().toLocaleString();\n\n// Sanitize inputs\nconst sanitize = (str) => {\n  return str.toString().replace(/<[^>]*>/g, '').substring(0, 1000);\n};\n\nreturn [{\n  json: {\n    originalData: formData,\n    processedData: {\n      name: sanitize(name),\n      email: email.toLowerCase().trim(),\n      subject: sanitize(subject),\n      message: sanitize(message),\n      phone: sanitize(phone),\n      company: sanitize(company)\n    },\n    validation: {\n      isValidEmail: isValidEmail,\n      hasRequiredFields: name && email && message\n    },\n    metadata: {\n      referenceNumber: referenceNumber,\n      submissionDate: submissionDate,\n      userAgent: formData.userAgent || 'Unknown',\n      ipAddress: formData.ipAddress || 'Unknown'\n    }\n  }\n}];"
+      },
+      "id": "2b3c4d5e-6f7g-8h9i-0j1k-l2m3n4o5p6q7",
+      "name": "Process Form Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{$json.validation.isValidEmail}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "2",
+              "leftValue": "={{$json.validation.hasRequiredFields}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "3c4d5e6f-7g8h-9i0j-1k2l-m3n4o5p6q7r8",
+      "name": "Validate Form Data",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourcompany.com",
+        "toEmail": "={{$json.processedData.email}}",
+        "subject": "Thank you for contacting us! [{{$json.metadata.referenceNumber}}]",
+        "message": "Dear {{$json.processedData.name}},\\n\\nThank you for reaching out to us! We have successfully received your message and wanted to confirm that we got it.\\n\\nHere's a summary of your submission:\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\nSUBMISSION DETAILS\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\nReference Number: {{$json.metadata.referenceNumber}}\\nSubmitted: {{$json.metadata.submissionDate}}\\nName: {{$json.processedData.name}}\\nEmail: {{$json.processedData.email}}\\n{{$json.processedData.company ? 'Company: ' + $json.processedData.company + '\\n' : ''}}{{$json.processedData.phone ? 'Phone: ' + $json.processedData.phone + '\\n' : ''}}Subject: {{$json.processedData.subject}}\\n\\nYour Message:\\n{{$json.processedData.message}}\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\nWHAT HAPPENS NEXT?\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n• Our team will review your message within 24 hours\\n• You can expect a personalized response within 2 business days\\n• For urgent matters, please call us at (555) 123-4567\\n• Keep your reference number handy for faster service\\n\\nWe appreciate you taking the time to contact us and look forward to assisting you!\\n\\nBest regards,\\nCustomer Service Team\\nYour Company Name\\n\\n---\\nThis is an automated confirmation email. Please do not reply to this message.\\nIf you need immediate assistance, please contact us at support@yourcompany.com",
+        "options": {}
+      },
+      "id": "4d5e6f7g-8h9i-0j1k-2l3m-n4o5p6q7r8s9",
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "forms@yourcompany.com",
+        "toEmail": "admin@yourcompany.com",
+        "subject": "New Form Submission [{{$json.metadata.referenceNumber}}]",
+        "message": "New form submission received!\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\nFORM SUBMISSION DETAILS\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\nReference: {{$json.metadata.referenceNumber}}\\nSubmitted: {{$json.metadata.submissionDate}}\\n\\nContact Information:\\n• Name: {{$json.processedData.name}}\\n• Email: {{$json.processedData.email}}\\n{{$json.processedData.company ? '• Company: ' + $json.processedData.company + '\\n' : ''}}{{$json.processedData.phone ? '• Phone: ' + $json.processedData.phone + '\\n' : ''}}\\nInquiry Details:\\n• Subject: {{$json.processedData.subject}}\\n• Message: {{$json.processedData.message}}\\n\\nTechnical Details:\\n• User Agent: {{$json.metadata.userAgent}}\\n• IP Address: {{$json.metadata.ipAddress}}\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\nA confirmation email has been automatically sent to the customer.\\nPlease follow up within 24 hours.\\n\\n---\\nThis is an automated notification from your website form."
+      },
+      "id": "5e6f7g8h-9i0j-1k2l-3m4n-o5p6q7r8s9t0",
+      "name": "Notify Admin",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"success\", \"message\": \"Thank you! Your message has been received.\", \"referenceNumber\": \"{{$json.metadata.referenceNumber}}\"}",
+        "options": {}
+      },
+      "id": "6f7g8h9i-0j1k-2l3m-4n5o-p6q7r8s9t0u1",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"error\", \"message\": \"Please check your email address and ensure all required fields are filled.\"}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "7g8h9i0j-1k2l-3m4n-5o6p-q7r8s9t0u1v2",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        900,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process Form Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Form Data": {
+      "main": [
+        [
+          {
+            "node": "Validate Form Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Form Data": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Admin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation Email": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2024-01-15T10:00:00.000Z",
+  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1",
+  "triggerCount": 0,
+  "tags": []
+}
