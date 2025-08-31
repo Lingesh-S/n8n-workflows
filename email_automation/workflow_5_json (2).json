@@ -1,0 +1,205 @@
+{
+  "name": "Invoice Due Date Reminder System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "1a2b3c4d-5e6f-7g8h-9i0j-k1l2m3n4o5p6",
+      "name": "Daily Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": "1234567890abcdefghijklmnopqrstuv",
+        "sheetName": "Invoices",
+        "options": {}
+      },
+      "id": "2b3c4d5e-6f7g-8h9i-0j1k-l2m3n4o5p6q7",
+      "name": "Get Invoice Data",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const invoices = $input.all();\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n\nconst daysDifference = (date1, date2) => {\n  const diffTime = date1 - date2;\n  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));\n};\n\nconst formatCurrency = (amount) => {\n  return new Intl.NumberFormat('en-US', {\n    style: 'currency',\n    currency: 'USD'\n  }).format(amount);\n};\n\nconst processedInvoices = invoices.map(item => {\n  const invoice = item.json;\n  \n  const parseDate = (dateStr) => {\n    if (!dateStr) return null;\n    let date = new Date(dateStr);\n    if (isNaN(date.getTime())) {\n      const parts = dateStr.split('/');\n      if (parts.length === 3) {\n        date = new Date(parts[2], parts[0] - 1, parts[1]);\n      }\n    }\n    return isNaN(date.getTime()) ? null : date;\n  };\n  \n  const dueDate = parseDate(invoice.due_date || invoice.dueDate || invoice['Due Date']);\n  const issueDate = parseDate(invoice.issue_date || invoice.issueDate || invoice['Issue Date']);\n  \n  if (!dueDate) {\n    return null;\n  }\n  \n  const daysUntilDue = daysDifference(dueDate, today);\n  \n  let reminderType = null;\n  let priority = 'low';\n  \n  if (daysUntilDue <= 0) {\n    reminderType = 'overdue';\n    priority = 'high';\n  } else if (daysUntilDue <= 3) {\n    reminderType = 'urgent';\n    priority = 'high';\n  } else if (daysUntilDue <= 7) {\n    reminderType = 'upcoming';\n    priority = 'medium';\n  } else if (daysUntilDue <= 14) {\n    reminderType = 'early';\n    priority = 'low';\n  }\n  \n  return {\n    invoiceNumber: invoice.invoice_number || invoice.invoiceNumber || invoice['Invoice Number'],\n    clientName: invoice.client_name || invoice.clientName || invoice['Client Name'],\n    clientEmail: invoice.client_email || invoice.clientEmail || invoice['Client Email'],\n    amount: parseFloat(invoice.amount || invoice.total || invoice['Amount'] || 0),\n    currency: invoice.currency || 'USD',\n    dueDate: dueDate.toISOString().split('T')[0],\n    issueDate: issueDate ? issueDate.toISOString().split('T')[0] : null,\n    daysUntilDue: daysUntilDue,\n    reminderType: reminderType,\n    priority: priority,\n    status: invoice.status || invoice['Status'] || 'pending',\n    description: invoice.description || invoice['Description'] || 'Professional services'\n  };\n}).filter(invoice => invoice !== null && invoice.status !== 'paid' && invoice.reminderType);\n\nconst reminderGroups = {\n  overdue: processedInvoices.filter(inv => inv.reminderType === 'overdue'),\n  urgent: processedInvoices.filter(inv => inv.reminderType === 'urgent'),\n  upcoming: processedInvoices.filter(inv => inv.reminderType === 'upcoming'),\n  early: processedInvoices.filter(inv => inv.reminderType === 'early')\n};\n\nconst totals = {\n  overdue: reminderGroups.overdue.reduce((sum, inv) => sum + inv.amount, 0),\n  urgent: reminderGroups.urgent.reduce((sum, inv) => sum + inv.amount, 0),\n  upcoming: reminderGroups.upcoming.reduce((sum, inv) => sum + inv.amount, 0),\n  all: processedInvoices.reduce((sum, inv) => sum + inv.amount, 0)\n};\n\nreturn [{\n  json: {\n    summary: {\n      totalInvoices: processedInvoices.length,\n      overdueCount: reminderGroups.overdue.length,\n      urgentCount: reminderGroups.urgent.length,\n      upcomingCount: reminderGroups.upcoming.length,\n      earlyCount: reminderGroups.early.length,\n      totals: totals,\n      checkedAt: new Date().toISOString()\n    },\n    invoices: processedInvoices,\n    reminderGroups: reminderGroups,\n    needsReminders: processedInvoices.length > 0\n  }\n}];"
+      },
+      "id": "3c4d5e6f-7g8h-9i0j-1k2l-m3n4o5p6q7r8",
+      "name": "Process Invoice Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{$json.needsReminders}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "4d5e6f7g-8h9i-0j1k-2l3m-n4o5p6q7r8s9",
+      "name": "Check if Reminders Needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "inputData": "={{$json.reminderGroups.overdue.concat($json.reminderGroups.urgent)}}",
+        "options": {}
+      },
+      "id": "5e6f7g8h-9i0j-1k2l-3m4n-o5p6q7r8s9t0",
+      "name": "Split High Priority",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "billing@yourcompany.com",
+        "toEmail": "={{$json.clientEmail}}",
+        "subject": "{{$json.reminderType === 'overdue' ? '🚨 OVERDUE: ' : '⏰ URGENT: '}}Invoice #{{$json.invoiceNumber}} - Payment Required",
+        "message": "Dear {{$json.clientName}},\\n\\n{{$json.reminderType === 'overdue' ? 'This is an urgent notice regarding your overdue payment.' : 'This is a friendly reminder that your payment is due soon.'}}\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\nINVOICE DETAILS\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\nInvoice Number: {{$json.invoiceNumber}}\\nAmount Due: {{new Intl.NumberFormat('en-US', {style: 'currency', currency: $json.currency}).format($json.amount)}}\\nDue Date: {{new Date($json.dueDate).toLocaleDateString()}}\\n{{$json.issueDate ? 'Issue Date: ' + new Date($json.issueDate).toLocaleDateString() + '\\n' : ''}}Services: {{$json.description}}\\n\\n{{$json.reminderType === 'overdue' ? '⚠️  PAYMENT STATUS: OVERDUE by ' + Math.abs($json.daysUntilDue) + ' day(s)\\n\\nImmediate action is required to avoid any service disruption or late fees.' : '📅 Payment is due in ' + $json.daysUntilDue + ' day(s).\\n\\nTo avoid any late fees, please ensure payment is processed before the due date.'}}\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\nPAYMENT OPTIONS\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n💳 Online Payment: https://yourcompany.com/pay/{{$json.invoiceNumber}}\\n🏦 Bank Transfer: \\n   Account: 1234567890\\n   Routing: 987654321\\n   Reference: {{$json.invoiceNumber}}\\n\\n📧 Questions? Reply to this email or call us at (555) 123-4567\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\nWe appreciate your business and look forward to your prompt payment.\\n\\nBest regards,\\nAccounts Receivable Department\\nYour Company Name\\n\\n---\\nThis is an automated reminder. Please do not reply unless you have questions.\\nIf you have already made this payment, please disregard this notice."
+      },
+      "id": "6f7g8h9i-0j1k-2l3m-4n5o-p6q7r8s9t0u1",
+      "name": "Send Individual Reminders",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "billing@yourcompany.com",
+        "toEmail": "finance@yourcompany.com, manager@yourcompany.com",
+        "subject": "📊 Daily Invoice Reminder Report - {{$json.summary.totalInvoices}} invoices need attention",
+        "message": "Invoice Reminder Summary Report\\n════════════════════════════════\\n\\nDate: {{new Date($json.summary.checkedAt).toLocaleDateString()}}\\nTime: {{new Date($json.summary.checkedAt).toLocaleTimeString()}}\\n\\n💰 FINANCIAL OVERVIEW\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\nTotal Outstanding: {{new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format($json.summary.totals.all)}}\\n🚨 Overdue Amount: {{new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format($json.summary.totals.overdue)}}\\n⏰ Due Soon (3 days): {{new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format($json.summary.totals.urgent)}}\\n📅 Due This Week: {{new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format($json.summary.totals.upcoming)}}\\n\\n📈 INVOICE COUNTS\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\nTotal Invoices: {{$json.summary.totalInvoices}}\\n🚨 Overdue: {{$json.summary.overdueCount}}\\n⏰ Urgent (≤3 days): {{$json.summary.urgentCount}}\\n📅 Due This Week: {{$json.summary.upcomingCount}}\\n📋 Early Reminders: {{$json.summary.earlyCount}}\\n\\n{{$json.summary.overdueCount > 0 ? '🚨 OVERDUE INVOICES (' + $json.summary.overdueCount + ')\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n' + $json.reminderGroups.overdue.map(inv => '• Invoice #' + inv.invoiceNumber + ' - ' + inv.clientName + '\\n  Amount: ' + new Intl.NumberFormat('en-US', {style: 'currency', currency: inv.currency}).format(inv.amount) + '\\n  Overdue by: ' + Math.abs(inv.daysUntilDue) + ' days\\n  Client: ' + inv.clientEmail).join('\\n\\n') + '\\n\\n' : ''}}{{$json.summary.urgentCount > 0 ? '⏰ URGENT - DUE WITHIN 3 DAYS (' + $json.summary.urgentCount + ')\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n' + $json.reminderGroups.urgent.map(inv => '• Invoice #' + inv.invoiceNumber + ' - ' + inv.clientName + '\\n  Amount: ' + new Intl.NumberFormat('en-US', {style: 'currency', currency: inv.currency}).format(inv.amount) + '\\n  Due in: ' + inv.daysUntilDue + ' days\\n  Client: ' + inv.clientEmail).join('\\n\\n') + '\\n\\n' : ''}}📋 RECOMMENDED ACTIONS\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n{{$json.summary.overdueCount > 0 ? '• Follow up immediately on overdue invoices\\n' : ''}}{{$json.summary.urgentCount > 0 ? '• Send urgent payment reminders for invoices due within 3 days\\n' : ''}}{{$json.summary.upcomingCount > 0 ? '• Monitor upcoming due dates for potential issues\\n' : ''}}• Review payment terms with frequently late clients\\n• Consider implementing automated payment processing\\n• Update client contact information if emails bounce\\n\\nTotal reminder emails sent: {{($json.summary.overdueCount + $json.summary.urgentCount)}}\\n\\n---\\nThis is an automated report from your invoice management system.\\nFor detailed invoice management, please access your accounting dashboard."
+      },
+      "id": "7g8h9i0j-1k2l-3m4n-5o6p-q7r8s9t0u1v2",
+      "name": "Send Summary Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Daily Check": {
+      "main": [
+        [
+          {
+            "node": "Get Invoice Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Invoice Data": {
+      "main": [
+        [
+          {
+            "node": "Process Invoice Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Invoice Data": {
+      "main": [
+        [
+          {
+            "node": "Check if Reminders Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Reminders Needed": {
+      "main": [
+        [
+          {
+            "node": "Split High Priority",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Summary Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split High Priority": {
+      "main": [
+        [
+          {
+            "node": "Send Individual Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2024-01-15T10:00:00.000Z",
+  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1",
+  "triggerCount": 0,
+  "tags": []
+}
